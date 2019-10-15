@@ -1,15 +1,13 @@
 language: python
+
 python:
   - "3.6"
   - "3.7"
 
-matrix:
-  include:
-  - os: linux
-  - os: osx
-    language: minimal
-  - os: windows
-    language: minimal
+os:
+ - linux
+ - osx
+ - windows
 
 install:
   - pip install --upgrade pip
