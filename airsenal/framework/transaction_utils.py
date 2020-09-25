@@ -1,19 +1,16 @@
 """
 Functions to help fill the Transaction table, where players are bought and sold,
-hopefully with the correct price.  Needs FPL_TEAM_ID to be set, either via environment variable,
-or a file named FPL_TEAM_ID in airsenal/data/
+hopefully with the correct price.  Needs FPL_TEAM_ID to be set, either via
+environment variable, or a file named FPL_TEAM_ID in airsenal/data/
 """
 
-import os
 
-from .schema import Transaction, session_scope
+from .schema import Transaction
 from .utils import (
     get_players_for_gameweek,
     fetcher,
-    get_past_seasons,
     NEXT_GAMEWEEK,
     CURRENT_SEASON,
-    get_player,
 )
 
 
@@ -35,13 +32,14 @@ def add_transaction(player_id, gameweek, in_or_out, price, season, tag, session)
 
 def fill_initial_team(session, season=CURRENT_SEASON, tag="AIrsenal" + CURRENT_SEASON):
     """
-    Fill the Transactions table in the database with the initial 15 players, and their costs,
-    getting the information from the team history API endpoint (for the list of players in our team)
-    and the player history API endpoint (for their price in gw1).
+    Fill the Transactions table in the database with the initial 15 players,
+    and their costs,getting the information from the team history API endpoint
+    (for the list of players in our team)and the player history API endpoint
+    (for their price in gw1).
     """
     print("SQUAD Getting selected players for gameweek 1...")
     if NEXT_GAMEWEEK == 1:
-        ### Season hasn't started yet - there won't be a team in the DB
+        # Season hasn't started yet - there won't be a team in the DB
         return True
     api_players = get_players_for_gameweek(1)
     for pid in api_players:
@@ -67,8 +65,8 @@ def update_team(
     session, season=CURRENT_SEASON, tag="AIrsenal" + CURRENT_SEASON, verbose=True
 ):
     """
-    Fill the Transactions table in the DB with all the transfers in gameweeks after 1, using
-    the transfers API endpoint which has the correct buy and sell prices.
+    Fill the Transactions table in the DB with all the transfers in gameweeks after 1,
+    using the transfers API endpoint which has the correct buy and sell prices.
     """
     transfers = fetcher.get_fpl_transfer_data()
     for transfer in transfers:

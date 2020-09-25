@@ -1,14 +1,14 @@
 """
 Useful commands to query the db
 """
-import copy
 from operator import itemgetter
 from datetime import datetime, timezone
 import pandas as pd
 import dateparser
 import re
 
-from .mappings import alternative_team_names, alternative_player_names
+from .mappings import alternative_player_names
+from .bpl_interface import get_fitted_team_model
 
 from .data_fetcher import FPLDataFetcher
 from .schema import (
@@ -20,12 +20,11 @@ from .schema import (
     PlayerScore,
     PlayerPrediction,
     Transaction,
-    FifaTeamRating,
     Team,
     engine,
 )
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy import and_, or_, case, func, desc
+from sqlalchemy import or_, case, func, desc
 
 
 Base.metadata.bind = engine
@@ -88,9 +87,9 @@ def get_next_gameweek(season=CURRENT_SEASON, dbsession=None):
                     and fixture.gameweek < earliest_future_gameweek
                 ):
                     earliest_future_gameweek = fixture.gameweek
-            except (TypeError):  ## date could be null if fixture not scheduled
+            except (TypeError):  # date could be null if fixture not scheduled
                 continue
-        ## now make sure we aren't in the middle of a gameweek
+        # now make sure we aren't in the middle of a gameweek
         for fixture in fixtures:
             try:
                 if (
@@ -137,9 +136,6 @@ NEXT_GAMEWEEK = get_next_gameweek()
 
 # TODO make this a database table so we can look at past seasons
 CURRENT_TEAMS = [t["short_name"] for t in fetcher.get_current_team_data().values()]
-
-
-from .bpl_interface import get_fitted_team_model
 
 
 def get_previous_season(season):
@@ -221,7 +217,6 @@ def get_sell_price_for_player(player_id, gameweek=None):
     if the price increased in that time, we only get half the profit.
     if gameweek is None, get price we could sell the player for now.
     """
-    buy_price = 0
     transactions = session.query(Transaction)
     transactions = transactions.filter_by(player_id=player_id)
     transactions = transactions.order_by(Transaction.gameweek).all()
@@ -240,7 +235,7 @@ def get_sell_price_for_player(player_id, gameweek=None):
             )
         )
     pdata_bought = fetcher.get_gameweek_data_for_player(player_id, gw_bought)
-    ## will be a list - can be more than one match in a gw - just use the 1st.
+    # will be a list - can be more than one match in a gw - just use the 1st.
     price_bought = pdata_bought[0]["value"]
 
     if not gameweek:  # assume we want the current (i.e. next) gameweek
@@ -248,7 +243,7 @@ def get_sell_price_for_player(player_id, gameweek=None):
     else:
         pdata_now = fetcher.get_gameweek_data_for_player(player_id, gw_bought)
         price_now = pdata_now[0]["value"]
-    ## take off our half of the profit - boo!
+    # take off our half of the profit - boo!
     if price_now > price_bought:
         value = (price_now + price_bought) // 2  # round down
     else:
@@ -355,14 +350,14 @@ def get_player_id(player_name, dbsession=None):
     p = dbsession.query(Player).filter_by(name=player_name).first()
     if p:
         return p.player_id
-    ## not found by name in DB - try alternative names
+    # not found by name in DB - try alternative names
     for k, v in alternative_player_names.items():
         if player_name in v:
             p = session.query(Player).filter_by(name=k).first()
             if p:
                 return p.player_id
             break
-    ## still not found
+    # still not found
     print("Unknown player_name {}".format(player_name))
     return None
 
@@ -576,9 +571,7 @@ def get_next_fixture_for_player(
     fixtures_for_player = get_fixtures_for_player(player, season, [gameweek], dbsession)
     output_string = ""
     for fixture in fixtures_for_player:
-        is_home = False
         if fixture.home_team == team:
-            is_home = True
             output_string += fixture.away_team + " (h)"
         else:
             output_string += fixture.home_team + " (a)"
@@ -658,11 +651,11 @@ def get_previous_points_for_same_fixture(player, fixture_id):
     for fid in fixture_ids:
         scores = (
             session.query(PlayerScore)
-            .filter_by(player_id=player_id, fixture_id=m[0])
+            .filter_by(player_id=player_id, fixture_id=fid[0])
             .all()
         )
         for s in scores:
-            previous_points[m[1]] = s.points
+            previous_points[fid[1]] = s.points
 
     return previous_points
 
@@ -685,16 +678,16 @@ def get_predicted_points_for_player(player, tag, season=CURRENT_SEASON, dbsessio
     )
     ppdict = {}
     for prediction in pps:
-        ## there is one prediction per fixture.
-        ## for double gameweeks, we need to add the two together
+        # there is one prediction per fixture.
+        # for double gameweeks, we need to add the two together
         gameweek = prediction.fixture.gameweek
-        if not gameweek in ppdict.keys():
+        if gameweek not in ppdict.keys():
             ppdict[gameweek] = 0
         ppdict[gameweek] += prediction.predicted_points
-    ## we still need to fill in zero for gameweeks that they're not playing.
+    # we still need to fill in zero for gameweeks that they're not playing.
     max_gw = get_max_gameweek(season, dbsession)
     for gw in range(1, max_gw + 1):
-        if not gw in ppdict.keys():
+        if gw not in ppdict.keys():
             ppdict[gw] = 0.0
     return ppdict
 
@@ -934,7 +927,7 @@ def get_recent_playerscore_rows(
         last_gw = last_available_gameweek
 
     first_gw = last_gw - num_match_to_use
-    ## get the playerscore rows from the db
+    # get the playerscore rows from the db
     rows = (
         dbsession.query(PlayerScore)
         .filter(PlayerScore.fixture.has(season=season))
@@ -943,9 +936,9 @@ def get_recent_playerscore_rows(
         .filter(PlayerScore.fixture.has(Fixture.gameweek <= last_gw))
         .all()
     )
-    ## for speed, we use the fact that matches from this season
-    ## are uploaded in order, so we can just take the last n
-    ## rows, no need to look up dates and sort.
+    # for speed, we use the fact that matches from this season
+    # are uploaded in order, so we can just take the last n
+    # rows, no need to look up dates and sort.
     return rows[-num_match_to_use:]
 
 
@@ -1012,7 +1005,7 @@ def get_last_gameweek_in_db(season=CURRENT_SEASON, dbsession=None):
     last_result = (
         dbsession.query(Fixture)
         .filter_by(season=season)
-        .filter(Fixture.result != None)
+        .filter(Fixture.result is not None)
         .order_by(Fixture.gameweek.desc())
         .first()
     )
@@ -1072,9 +1065,9 @@ def get_latest_fixture_tag(season=CURRENT_SEASON, dbsession=None):
 
 def fixture_probabilities(gameweek, season=CURRENT_SEASON, dbsession=None):
     """
-    Returns probabilities for all fixtures in a given gameweek and season, as a data frame with a row
-    for each fixture and columns being fixture_id, home_team, away_team, home_win_probability,
-    draw_probability, away_win_probability.
+    Returns probabilities for all fixtures in a given gameweek and season, as a data
+    frame with a rowfor each fixture and columns being fixture_id, home_team,
+    away_team, home_win_probability,draw_probability, away_win_probability.
     """
     model_team = get_fitted_team_model(season, dbsession)
     fixture_probabilities_list = []
@@ -1169,7 +1162,8 @@ def find_fixture(
 
     if not fixtures or len(fixtures) == 0:
         raise ValueError(
-            "No fixture with season={}, gw={}, team_name={}, was_home={}, other_team_name={}".format(
+            '''No fixture with season={}, gw={}, team_name={},
+            was_home={}, other_team_name={}'''.format(
                 season, gameweek, team_name, was_home, other_team_name
             )
         )
@@ -1193,7 +1187,8 @@ def find_fixture(
 
     if not fixture:
         raise ValueError(
-            "No unique fixture with season={}, gw={}, team_name={}, was_home={}, kickoff_time={}".format(
+            '''No unique fixture with season={}, gw={}, team_name={},
+            was_home={}, kickoff_time={}'''.format(
                 season, gameweek, team_name, was_home, kickoff_time
             )
         )

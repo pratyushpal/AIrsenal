@@ -20,11 +20,13 @@ setup(
             "airsenal_update_db=airsenal.scripts.update_results_transactions_db:main",
             "airsenal_plot=airsenal.scripts.plot_league_standings:main",
             "airsenal_run_prediction=airsenal.scripts.fill_predictedscore_table:main",
-            "airsenal_run_optimization=airsenal.scripts.fill_transfersuggestion_table:main",
+            '''airsenal_run_optimization=airsenal.scripts.
+            fill_transfersuggestion_table:main''',
             "airsenal_make_team=airsenal.scripts.team_builder:main",
             "airsenal_check_data=airsenal.scripts.data_sanity_checks:run_all_checks",
             "airsenal_dump_db=airsenal.scripts.dump_db_contents:main",
-            "airsenal_run_pipeline=airsenal.scripts.airsenal_run_pipeline:airsenal_run_pipeline",
+            '''airsenal_run_pipeline=airsenal.scripts.
+            airsenal_run_pipeline:airsenal_run_pipeline''',
         ]
     },
     package_data={"airsenal": ["data/*", "stan/*"]},
